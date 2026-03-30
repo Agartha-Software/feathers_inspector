@@ -22,7 +22,7 @@ use crate::gui::plugin::RefreshCache;
 use crate::gui::semantic_names::SemanticFieldNames;
 use crate::gui::state::{DetailTab, InspectorState};
 use crate::gui::widgets::drag_value::DragValueDragState;
-use crate::gui::widgets::registry::{WidgetBuilder, WidgetRegistry};
+use crate::gui::widgets::registry::{ErasedScene, WidgetRegistry};
 use crate::gui::widgets::{FieldPath, FieldPathSegment};
 use crate::inspection::component_inspection::ComponentMetadataMap;
 use crate::inspection::entity_inspection::{EntityInspection, EntityInspectionSettings};
@@ -239,7 +239,7 @@ fn render_active_tab(
 struct ReflectedField {
     name: String,
     indent: u8,
-    widget: WidgetBuilder,
+    widget: ErasedScene,
 }
 
 /// Extracts fields from a reflected value into a flat list of label/value pairs.
@@ -281,7 +281,7 @@ fn extract_fields_from_reflect(
                     fields.push(ReflectedField {
                         name: name.to_owned(),
                         indent,
-                        widget: widget_registry.label_widget(type_name, config),
+                        widget: ErasedScene::new(WidgetRegistry::label_widget(type_name, config)),
                     });
                 }
                 for i in 0..s.field_len() {
@@ -311,7 +311,7 @@ fn extract_fields_from_reflect(
                     fields.push(ReflectedField {
                         name: name.to_owned(),
                         indent,
-                        widget: widget_registry.label_widget(type_name, config),
+                        widget: ErasedScene::new(WidgetRegistry::label_widget(type_name, config)),
                     });
                 }
                 for i in 0..ts.field_len() {
@@ -344,7 +344,7 @@ fn extract_fields_from_reflect(
                 fields.push(ReflectedField {
                     name: name.unwrap_or("variant").to_owned(),
                     indent,
-                    widget: widget_registry.enum_widget(&type_name, e, config),
+                    widget: ErasedScene::new(WidgetRegistry::enum_widget(&type_name, e, config)),
                 });
 
                 // Build path to this variant
@@ -389,7 +389,7 @@ fn extract_fields_from_reflect(
                     fields.push(ReflectedField {
                         name: name.unwrap_or("value").to_owned(),
                         indent,
-                        widget: widget_registry.label_widget(val, config),
+                        widget: ErasedScene::new(WidgetRegistry::label_widget(val, config)),
                     });
                 }
             }
@@ -499,7 +499,10 @@ fn spawn_components_tab_exclusive(
                 fields.push(ReflectedField {
                     name: "Value".to_string(),
                     indent: 0,
-                    widget: widget_registry.label_widget(value_str.to_owned(), inspector_config),
+                    widget: ErasedScene::new(WidgetRegistry::label_widget(
+                        value_str.to_owned(),
+                        inspector_config,
+                    )),
                 });
             }
 
@@ -592,7 +595,7 @@ fn spawn_components_tab_exclusive(
                             TextColor(field_name_color),
                         ));
 
-                        field.widget.apply_widget(&mut row.spawn_empty());
+                        field.widget.apply(&mut row.spawn_empty());
                     });
                 }
             });

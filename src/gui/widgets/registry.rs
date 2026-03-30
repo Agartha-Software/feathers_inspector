@@ -1,5 +1,7 @@
+use bevy::ecs::template::template;
 use bevy::prelude::*;
 use bevy::reflect::enums::Enum;
+use bevy::scene2::{EntityWorldMutSceneExt, Scene, bsn};
 use bevy::ui::Val::*;
 use bevy::{
     feathers::{
@@ -15,23 +17,23 @@ use crate::gui::{config::InspectorConfig, widgets::FieldPath};
 use super::reflected::PartialReflectWidget;
 
 /// Type-erasing function that places a widget [`Bundle`] into an empty entity
-pub struct WidgetBuilder(Box<dyn FnOnce(&mut EntityWorldMut<'_>) + 'static>);
+pub struct ErasedScene(Box<dyn FnOnce(&mut EntityWorldMut<'_>) + 'static>);
 
-impl WidgetBuilder {
-    pub fn new<B: Bundle>(widget: B) -> Self {
+impl ErasedScene {
+    pub fn new<S: Scene>(widget: S) -> Self {
         Self(Box::new(move |entity: &'_ mut EntityWorldMut<'_>| {
-            entity.insert(widget);
+            let _ = entity.apply_scene(widget);
         }))
     }
 
-    pub fn apply_widget(self, entity: &mut EntityWorldMut<'_>) {
+    pub fn apply(self, entity: &mut EntityWorldMut<'_>) {
         self.0(entity)
     }
 }
 
 /// Type-erasing function that initializes the [`Bundle`] for a given widget
 type WidgetCreator = Box<
-    dyn Fn(&dyn PartialReflect, &FieldPath, &InspectorConfig) -> Option<WidgetBuilder>
+    dyn Fn(&dyn PartialReflect, &FieldPath, &InspectorConfig) -> Option<ErasedScene>
         + Sync
         + Send
         + 'static,
@@ -57,8 +59,7 @@ impl WidgetRegistry {
 
     /// Register or override a type with a widget and bypass the [`PartialReflectWidget`] trait
     pub fn add_custom<T: Reflect>(&mut self, builder: WidgetCreator) {
-        self.builders
-            .insert(TypeId::of::<T>(), builder);
+        self.builders.insert(TypeId::of::<T>(), builder);
     }
 
     /// get a widget builder for this type if is registered
@@ -67,7 +68,7 @@ impl WidgetRegistry {
         t: &dyn PartialReflect,
         field_path: &FieldPath,
         config: &InspectorConfig,
-    ) -> Option<WidgetBuilder> {
+    ) -> Option<ErasedScene> {
         let type_id = t.get_represented_type_info().map(|info| info.type_id());
         type_id
             .and_then(|type_id| self.builders.get(&type_id))
@@ -75,53 +76,59 @@ impl WidgetRegistry {
     }
 
     /// get a label pseudo-widget
-    pub fn label_widget(&self, label: String, config: &InspectorConfig) -> WidgetBuilder {
-        WidgetBuilder::new((
-            Text::new(label),
-            TextFont {
-                font_size: FontSize::Px(config.small_font_size),
-                ..default()
-            },
-            ThemeFontColor(tokens::TEXT_DIM),
-            ThemedText,
-            TextColor(config.muted_text_color),
-        ))
+    pub fn label_widget(label: String, config: &InspectorConfig) -> impl Scene {
+        let muted_text_color = config.muted_text_color.clone();
+        let small_font_size = config.small_font_size.clone();
+
+        bsn!(
+            Text::new(label.clone())
+            template(move |_ctx|
+                Ok((
+                    TextFont {
+                        font_size: FontSize::Px(small_font_size),
+                        ..default()
+                    },
+                    ThemeFontColor(tokens::TEXT_DIM),
+                    ThemedText
+                ))
+            )
+            TextColor(muted_text_color)
+        )
     }
 
     /// get an enum variant widget for this type
     /// todo: mutation of the variant with this widget
-    pub fn enum_widget(
-        &self,
-        type_name: &str,
-        t: &dyn Enum,
-        config: &InspectorConfig,
-    ) -> WidgetBuilder {
-        WidgetBuilder::new((
+    pub fn enum_widget(type_name: &str, t: &dyn Enum, config: &InspectorConfig) -> impl Scene {
+        let small_font_size = config.small_font_size.clone();
+        let inner = format!("{type_name}::{}", t.variant_name());
+
+        bsn!(
             Node {
-                min_width: Px(60.0),
+                min_width: Val::Px(60.0),
                 padding: UiRect::horizontal(Px(4.0)),
                 border: UiRect::all(Px(1.0)),
-                ..default()
-            },
-            BorderColor::all(Color::srgba(0.3, 0.3, 0.3, 1.0)),
-            BackgroundColor(Color::srgba(0.15, 0.15, 0.15, 1.0)),
-            Children::spawn_one((
-                Text::new(format!("{type_name}::{}", t.variant_name())),
-                TextFont {
-                    font_size: FontSize::Px(config.small_font_size),
-                    ..default()
-                },
-            )),
-        ))
+            }
+            BorderColor::all(Color::srgba(0.3, 0.3, 0.3, 1.0))
+            BackgroundColor(Color::srgba(0.15, 0.15, 0.15, 1.0))
+            Children [(
+                Text::new(inner.clone())
+                template(move |_ctx|
+                    Ok(TextFont {
+                        font_size: FontSize::Px(small_font_size),
+                        ..default()
+                    })
+                )
+            )]
+        )
     }
 
-    /// function enclosing the creation of a builder 
+    /// function enclosing the creation of a builder
     fn builder_for<T: PartialReflectWidget>(
         t: &dyn PartialReflect,
         field_path: &FieldPath,
         config: &InspectorConfig,
-    ) -> Option<WidgetBuilder> {
+    ) -> Option<ErasedScene> {
         let widget = <T as PartialReflectWidget>::try_widget(t, field_path, config)?;
-        Some(WidgetBuilder::new(widget))
+        Some(ErasedScene::new(widget))
     }
 }

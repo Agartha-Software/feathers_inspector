@@ -60,7 +60,7 @@ fn vec3_value(field: &str, val: f32, color: Color, mut field_path: FieldPath) ->
         }
         DragValueDragState
         Interaction
-        Children [
+        Children [(
             Text::new(format!("{:.2}", val))
             template(move |ctx| {
                 let small_font_size = ctx.resource::<InspectorConfig>().small_font_size;
@@ -71,7 +71,7 @@ fn vec3_value(field: &str, val: f32, color: Color, mut field_path: FieldPath) ->
                 })
             })
             TextColor(color)
-        ]
+        )]
     }
 }
 
@@ -120,7 +120,7 @@ impl ReflectWidget for f32 {
             }
             DragValueDragState
             Interaction
-            Children[(
+            Children [(
                 Text::new(format!("{:.2}", val))
                 template(move |ctx| {
                     let small_font_size = ctx.resource::<InspectorConfig>().small_font_size;

@@ -15,7 +15,7 @@ use super::{FieldPath, FieldPathSegment};
 pub trait ReflectWidget: Reflect + Sized {
     /// Construct a widget bundle with a reference to [`Self`] and the path to the field containing self
     /// This bundle will be added to an otherwise empty entity serving as the container for this widget
-    fn widget(&self, field_path: &FieldPath, config: &InspectorConfig) -> impl Scene;
+    fn widget(&self, field_path: &FieldPath) -> impl Scene;
 }
 
 /// Trait to construct a reflector widget from any PartialReflect type
@@ -26,37 +26,22 @@ pub trait ReflectWidget: Reflect + Sized {
 pub trait PartialReflectWidget: PartialReflect + Sized {
     /// Try to construct a bundle with a potentially dynamic object.
     /// this can fail, for example if this expects the type to be fully reflected but it as not
-    fn try_widget(
-        self_: &dyn PartialReflect,
-        field_path: &FieldPath,
-        config: &InspectorConfig,
-    ) -> Option<impl Scene>;
+    fn try_widget(self_: &dyn PartialReflect, field_path: &FieldPath) -> Option<impl Scene>;
 }
 
 impl<T: ReflectWidget> PartialReflectWidget for T {
     /// Try using the concrete type's [`ReflectWidget`] implementation
-    fn try_widget(
-        self_: &dyn PartialReflect,
-        field_path: &FieldPath,
-        config: &InspectorConfig,
-    ) -> Option<impl Scene> {
+    fn try_widget(self_: &dyn PartialReflect, field_path: &FieldPath) -> Option<impl Scene> {
         self_
             .try_downcast_ref::<Self>()
-            .map(|self_| ReflectWidget::widget(self_, field_path, config))
+            .map(|self_| ReflectWidget::widget(self_, field_path))
     }
 }
 
-fn vec3_value(
-    field: &str,
-    val: f32,
-    color: Color,
-    mut field_path: FieldPath,
-    config: &InspectorConfig,
-) -> impl Scene {
+fn vec3_value(field: &str, val: f32, color: Color, mut field_path: FieldPath) -> impl Scene {
     field_path
         .path
         .push(FieldPathSegment::Named(field.to_owned()));
-    let small_font_size = config.small_font_size.clone();
 
     bsn! {
         Node {
@@ -78,23 +63,21 @@ fn vec3_value(
         Interaction
         Children [
             Text::new(format!("{:.2}", val))
-            template(move |_ctx| Ok(
-                TextFont {
+            template(move |ctx| {
+                let small_font_size = ctx.resource::<InspectorConfig>().small_font_size;
+
+                Ok(TextFont {
                     font_size: FontSize::Px(small_font_size),
                     ..default()
-                }
-            ))
+                })
+            })
             TextColor(color)
         ]
     }
 }
 
 impl PartialReflectWidget for Vec3 {
-    fn try_widget(
-        self_: &dyn PartialReflect,
-        field_path: &FieldPath,
-        config: &InspectorConfig,
-    ) -> Option<impl Scene> {
+    fn try_widget(self_: &dyn PartialReflect, field_path: &FieldPath) -> Option<impl Scene> {
         let self_ = self_.reflect_ref().as_struct().ok()?;
         let x = *self_.field_at(0)?.try_downcast_ref::<f32>()?;
         let y = *self_.field_at(1)?.try_downcast_ref::<f32>()?;
@@ -108,18 +91,17 @@ impl PartialReflectWidget for Vec3 {
             }
 
             Children [
-                (vec3_value("x", x, Color::srgba(1., 0.5, 0.5, 1.), field_path.clone(), config)),
-                (vec3_value("y", y, Color::srgba(0.5, 1., 0.5, 1.), field_path.clone(), config)),
-                (vec3_value("z", z, Color::srgba(0.5, 0.5, 1., 1.), field_path.clone(), config))
+                (vec3_value("x", x, Color::srgba(1., 0.5, 0.5, 1.), field_path.clone())),
+                (vec3_value("y", y, Color::srgba(0.5, 1., 0.5, 1.), field_path.clone())),
+                (vec3_value("z", z, Color::srgba(0.5, 0.5, 1., 1.), field_path.clone()))
             ]
         })
     }
 }
 
 impl ReflectWidget for f32 {
-    fn widget(&self, field_path: &FieldPath, config: &InspectorConfig) -> impl Scene {
+    fn widget(&self, field_path: &FieldPath) -> impl Scene {
         let val = *self;
-        let small_font_size = config.small_font_size.clone();
         let field_path = field_path.clone();
 
         bsn!(
@@ -143,7 +125,9 @@ impl ReflectWidget for f32 {
             Interaction
             Children[(
                 Text::new(format!("{:.2}", val))
-                template(move |_ctx| {
+                template(move |ctx| {
+                    let small_font_size = ctx.resource::<InspectorConfig>().small_font_size;
+
                     Ok(TextFont {
                         font_size: FontSize::Px(small_font_size),
                         ..default()

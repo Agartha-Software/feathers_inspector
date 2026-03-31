@@ -32,12 +32,8 @@ impl ErasedScene {
 }
 
 /// Type-erasing function that initializes the [`Bundle`] for a given widget
-type WidgetCreator = Box<
-    dyn Fn(&dyn PartialReflect, &FieldPath, &InspectorConfig) -> Option<ErasedScene>
-        + Sync
-        + Send
-        + 'static,
->;
+type WidgetCreator =
+    Box<dyn Fn(&dyn PartialReflect, &FieldPath) -> Option<ErasedScene> + Sync + Send + 'static>;
 
 /// Registry storing the widget implementations for types
 #[derive(Resource, Default)]
@@ -67,39 +63,36 @@ impl WidgetRegistry {
         &self,
         t: &dyn PartialReflect,
         field_path: &FieldPath,
-        config: &InspectorConfig,
     ) -> Option<ErasedScene> {
         let type_id = t.get_represented_type_info().map(|info| info.type_id());
         type_id
             .and_then(|type_id| self.builders.get(&type_id))
-            .and_then(|b| b(t, field_path, config))
+            .and_then(|b| b(t, field_path))
     }
 
     /// get a label pseudo-widget
-    pub fn label_widget(label: String, config: &InspectorConfig) -> impl Scene {
-        let muted_text_color = config.muted_text_color.clone();
-        let small_font_size = config.small_font_size.clone();
-
+    pub fn label_widget(label: String) -> impl Scene {
         bsn!(
             Text::new(label.clone())
-            template(move |_ctx|
+            template(move |ctx| {
+                let config = ctx.resource::<InspectorConfig>();
+
                 Ok((
                     TextFont {
-                        font_size: FontSize::Px(small_font_size),
+                        font_size: FontSize::Px(config.small_font_size),
                         ..default()
                     },
+                    ThemedText,
                     ThemeFontColor(tokens::TEXT_DIM),
-                    ThemedText
+                    TextColor(config.muted_text_color)
                 ))
-            )
-            TextColor(muted_text_color)
+            })
         )
     }
 
     /// get an enum variant widget for this type
     /// todo: mutation of the variant with this widget
-    pub fn enum_widget(type_name: &str, t: &dyn Enum, config: &InspectorConfig) -> impl Scene {
-        let small_font_size = config.small_font_size.clone();
+    pub fn enum_widget(type_name: &str, t: &dyn Enum) -> impl Scene {
         let inner = format!("{type_name}::{}", t.variant_name());
 
         bsn!(
@@ -112,11 +105,13 @@ impl WidgetRegistry {
             BackgroundColor(Color::srgba(0.15, 0.15, 0.15, 1.0))
             Children [(
                 Text::new(inner.clone())
-                template(move |_ctx|
+                template(move |ctx| {
+                    let small_font_size = ctx.resource::<InspectorConfig>().small_font_size;
+
                     Ok(TextFont {
                         font_size: FontSize::Px(small_font_size),
                         ..default()
-                    })
+                    })}
                 )
             )]
         )
@@ -126,9 +121,8 @@ impl WidgetRegistry {
     fn builder_for<T: PartialReflectWidget>(
         t: &dyn PartialReflect,
         field_path: &FieldPath,
-        config: &InspectorConfig,
     ) -> Option<ErasedScene> {
-        let widget = <T as PartialReflectWidget>::try_widget(t, field_path, config)?;
+        let widget = <T as PartialReflectWidget>::try_widget(t, field_path)?;
         Some(ErasedScene::new(widget))
     }
 }

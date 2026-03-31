@@ -266,7 +266,7 @@ fn extract_fields_from_reflect(
     );
 
     if let Some(path) = &path
-        && let Some(widget) = widget_registry.get_widget(reflected, path, config)
+        && let Some(widget) = widget_registry.get_widget(reflected, path)
     {
         fields.push(ReflectedField {
             name: name.unwrap_or("?").to_owned(),
@@ -281,7 +281,7 @@ fn extract_fields_from_reflect(
                     fields.push(ReflectedField {
                         name: name.to_owned(),
                         indent,
-                        widget: ErasedScene::new(WidgetRegistry::label_widget(type_name, config)),
+                        widget: ErasedScene::new(WidgetRegistry::label_widget(type_name)),
                     });
                 }
                 for i in 0..s.field_len() {
@@ -311,7 +311,7 @@ fn extract_fields_from_reflect(
                     fields.push(ReflectedField {
                         name: name.to_owned(),
                         indent,
-                        widget: ErasedScene::new(WidgetRegistry::label_widget(type_name, config)),
+                        widget: ErasedScene::new(WidgetRegistry::label_widget(type_name)),
                     });
                 }
                 for i in 0..ts.field_len() {
@@ -344,7 +344,7 @@ fn extract_fields_from_reflect(
                 fields.push(ReflectedField {
                     name: name.unwrap_or("variant").to_owned(),
                     indent,
-                    widget: ErasedScene::new(WidgetRegistry::enum_widget(&type_name, e, config)),
+                    widget: ErasedScene::new(WidgetRegistry::enum_widget(&type_name, e)),
                 });
 
                 // Build path to this variant
@@ -389,7 +389,7 @@ fn extract_fields_from_reflect(
                     fields.push(ReflectedField {
                         name: name.unwrap_or("value").to_owned(),
                         indent,
-                        widget: ErasedScene::new(WidgetRegistry::label_widget(val, config)),
+                        widget: ErasedScene::new(WidgetRegistry::label_widget(val)),
                     });
                 }
             }
@@ -499,10 +499,7 @@ fn spawn_components_tab_exclusive(
                 fields.push(ReflectedField {
                     name: "Value".to_string(),
                     indent: 0,
-                    widget: ErasedScene::new(WidgetRegistry::label_widget(
-                        value_str.to_owned(),
-                        inspector_config,
-                    )),
+                    widget: ErasedScene::new(WidgetRegistry::label_widget(value_str.to_owned())),
                 });
             }
 

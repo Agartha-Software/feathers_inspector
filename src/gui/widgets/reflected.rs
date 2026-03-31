@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::ui::Val::*;
 use crate::gui::config::InspectorConfig;
+use crate::gui::widgets::PauseForEditing;
 
 use super::{FieldPath, FieldPathSegment};
 use super::drag_value::{DragValue, DragValueDragState};
@@ -92,6 +93,7 @@ impl PartialReflectWidget for Vec3 {
                             min: None,
                             max: None,
                         },
+                        PauseForEditing(false),
                         DragValueDragState::default(),
                         Interaction::default(),
                         Children::spawn_one((
@@ -128,6 +130,7 @@ impl ReflectWidget for f32 {
                 min: None,
                 max: None,
             },
+            PauseForEditing(false),
             DragValueDragState::default(),
             Interaction::default(),
             Children::spawn_one((

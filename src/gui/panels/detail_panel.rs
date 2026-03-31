@@ -21,9 +21,8 @@ use crate::gui::config::InspectorConfig;
 use crate::gui::plugin::RefreshCache;
 use crate::gui::semantic_names::SemanticFieldNames;
 use crate::gui::state::{DetailTab, InspectorState};
-use crate::gui::widgets::drag_value::DragValueDragState;
 use crate::gui::widgets::registry::{WidgetBuilder, WidgetRegistry};
-use crate::gui::widgets::{FieldPath, FieldPathSegment};
+use crate::gui::widgets::{FieldPath, FieldPathSegment, PauseForEditing};
 use crate::inspection::component_inspection::ComponentMetadataMap;
 use crate::inspection::entity_inspection::{EntityInspection, EntityInspectionSettings};
 
@@ -103,9 +102,9 @@ pub fn render_detail_panel(world: &mut World) {
 
 fn check_for_state_changes(world: &mut World) -> Option<(Option<Entity>, DetailTab)> {
     let any_editing = world
-        .query::<&DragValueDragState>()
+        .query::<&PauseForEditing>()
         .iter(world)
-        .any(|state| state.dragging || state.editing);
+        .any(|state| **state);
 
     let mut state = world.resource_mut::<InspectorState>();
     let selected_object = state.selected_object;
@@ -344,7 +343,7 @@ fn extract_fields_from_reflect(
                 fields.push(ReflectedField {
                     name: name.unwrap_or("variant").to_owned(),
                     indent,
-                    widget: widget_registry.enum_widget(&type_name, e, config),
+                    widget: widget_registry.enum_widget(&type_name, e, path.clone(), config),
                 });
 
                 // Build path to this variant

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy::reflect::enums::Enum;
+use bevy::reflect::enums::{Enum, EnumInfo};
 use bevy::ui::Val::*;
 use bevy::{
     feathers::{
@@ -10,9 +10,13 @@ use bevy::{
 };
 use core::any::TypeId;
 
+use crate::gui::widgets::enum_widget;
 use crate::gui::{config::InspectorConfig, widgets::FieldPath};
 
 use super::reflected::PartialReflectWidget;
+
+#[derive(Reflect)]
+enum EmptyEnum {}
 
 /// Type-erasing function that places a widget [`Bundle`] into an empty entity
 pub struct WidgetBuilder(Box<dyn FnOnce(&mut EntityWorldMut<'_>) + 'static>);
@@ -57,8 +61,7 @@ impl WidgetRegistry {
 
     /// Register or override a type with a widget and bypass the [`PartialReflectWidget`] trait
     pub fn add_custom<T: Reflect>(&mut self, builder: WidgetCreator) {
-        self.builders
-            .insert(TypeId::of::<T>(), builder);
+        self.builders.insert(TypeId::of::<T>(), builder);
     }
 
     /// get a widget builder for this type if is registered
@@ -89,33 +92,49 @@ impl WidgetRegistry {
     }
 
     /// get an enum variant widget for this type
-    /// todo: mutation of the variant with this widget
     pub fn enum_widget(
         &self,
         type_name: &str,
         t: &dyn Enum,
+        field_path: Option<FieldPath>,
         config: &InspectorConfig,
     ) -> WidgetBuilder {
-        WidgetBuilder::new((
-            Node {
-                min_width: Px(60.0),
-                padding: UiRect::horizontal(Px(4.0)),
-                border: UiRect::all(Px(1.0)),
-                ..default()
-            },
-            BorderColor::all(Color::srgba(0.3, 0.3, 0.3, 1.0)),
-            BackgroundColor(Color::srgba(0.15, 0.15, 0.15, 1.0)),
-            Children::spawn_one((
-                Text::new(format!("{type_name}::{}", t.variant_name())),
-                TextFont {
-                    font_size: FontSize::Px(config.small_font_size),
+        if let Some(field_path) = field_path {
+            let (info, current) = t
+                .get_represented_enum_info()
+                .map_or((EnumInfo::new::<EmptyEnum>(&[]), 0), |info| {
+                    (info.clone(), t.variant_index())
+                });
+            WidgetBuilder::new(enum_widget::widget(
+                current,
+                type_name,
+                info,
+                field_path.clone(),
+                (),
+                (),
+            ))
+        } else {
+            WidgetBuilder::new((
+                Node {
+                    min_width: Px(60.0),
+                    padding: UiRect::horizontal(Px(4.0)),
+                    border: UiRect::all(Px(1.0)),
                     ..default()
                 },
-            )),
-        ))
+                BorderColor::all(Color::srgba(0.3, 0.3, 0.3, 1.0)),
+                BackgroundColor(Color::srgba(0.15, 0.15, 0.15, 1.0)),
+                Children::spawn_one((
+                    Text::new(format!("{type_name}::{}", t.variant_name())),
+                    TextFont {
+                        font_size: FontSize::Px(config.small_font_size),
+                        ..default()
+                    },
+                )),
+            ))
+        }
     }
 
-    /// function enclosing the creation of a builder 
+    /// function enclosing the creation of a builder
     fn builder_for<T: PartialReflectWidget>(
         t: &dyn PartialReflect,
         field_path: &FieldPath,

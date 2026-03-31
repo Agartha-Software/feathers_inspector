@@ -12,12 +12,12 @@ use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::picking::events::{Click, Drag, DragEnd, DragStart, Pointer};
 use bevy::prelude::*;
-use bevy::reflect::ReflectMut;
 use core::any::TypeId;
 use std::time::{Duration, Instant};
 
-use crate::reflection_tools::get_component_reflect_mut;
-use super::{FieldPath, FieldPathSegment};
+use super::FieldPath;
+use crate::gui::widgets::PauseForEditing;
+use crate::gui::widgets::apply::{DeferredChange, DeferredChanges};
 
 /// Double-click detection threshold (in milliseconds)
 const DOUBLE_CLICK_THRESHOLD_MS: u64 = 300;
@@ -117,12 +117,19 @@ pub struct DragValueChanged {
 // Observer: handle click for double-click detection
 fn drag_value_on_click(
     mut click: On<Pointer<Click>>,
-    mut q_drag_value: Query<(&DragValue, &mut DragValueDragState, &Children)>,
+    mut q_drag_value: Query<(
+        &DragValue,
+        &mut DragValueDragState,
+        &mut PauseForEditing,
+        &Children,
+    )>,
     q_text: Query<&Text>,
     mut input_focus: ResMut<InputFocus>,
     mut commands: Commands,
 ) {
-    if let Ok((drag_value, mut drag_state, children)) = q_drag_value.get_mut(click.entity) {
+    if let Ok((drag_value, mut drag_state, mut pause, children)) =
+        q_drag_value.get_mut(click.entity)
+    {
         click.propagate(false);
 
         let now = Instant::now();
@@ -132,9 +139,15 @@ fn drag_value_on_click(
             now.duration_since(last) < Duration::from_millis(DOUBLE_CLICK_THRESHOLD_MS)
         });
 
+        if drag_state.editing && input_focus.get() != Some(click.entity) {
+            // restore previously lost focus
+            input_focus.set(click.entity);
+        }
+
         if is_double_click && !drag_state.editing {
             // Enter edit mode
             drag_state.editing = true;
+            **pause = true;
 
             // Get current value and populate edit buffer
             let current_value = children
@@ -177,10 +190,17 @@ pub struct DragValueEditModeChanged {
 // Observer: handle drag start (skip if in edit mode)
 fn drag_value_on_drag_start(
     mut drag_start: On<Pointer<DragStart>>,
-    mut q_drag_value: Query<(&DragValue, &mut DragValueDragState, &Children)>,
+    mut q_drag_value: Query<(
+        &DragValue,
+        &mut DragValueDragState,
+        &mut PauseForEditing,
+        &Children,
+    )>,
     q_text: Query<&Text>,
 ) {
-    if let Ok((_drag_value, mut drag_state, children)) = q_drag_value.get_mut(drag_start.entity) {
+    if let Ok((_drag_value, mut drag_state, mut pause, children)) =
+        q_drag_value.get_mut(drag_start.entity)
+    {
         // Skip dragging if in edit mode
         if drag_state.editing {
             return;
@@ -200,6 +220,7 @@ fn drag_value_on_drag_start(
             .unwrap_or(0.0);
 
         drag_state.dragging = true;
+        **pause = true;
         drag_state.start_value = current_value;
     }
 }
@@ -242,11 +263,12 @@ fn drag_value_on_drag(
 // Observer: handle drag end
 fn drag_value_on_drag_end(
     mut drag_end: On<Pointer<DragEnd>>,
-    mut q_drag_value: Query<&mut DragValueDragState>,
+    mut q_drag_value: Query<(&mut DragValueDragState, &mut PauseForEditing)>,
 ) {
-    if let Ok(mut drag_state) = q_drag_value.get_mut(drag_end.entity) {
+    if let Ok((mut drag_state, mut pause)) = q_drag_value.get_mut(drag_end.entity) {
         drag_end.propagate(false);
         drag_state.dragging = false;
+        **pause = false;
     }
 }
 
@@ -266,118 +288,19 @@ fn update_drag_value_display(
     }
 }
 
-/// Navigates a field path and sets the value using reflection.
-/// Returns true on success, false on failure.
-fn set_field_value_recursive(
-    reflected: &mut dyn PartialReflect,
-    path: &[FieldPathSegment],
-    new_value: f64,
-) -> bool {
-    if path.is_empty() {
-        // At the target field - try to set the value
-        return apply_value_to_partial_reflect(reflected, new_value);
-    }
-
-    let segment = &path[0];
-    let remaining = &path[1..];
-
-    match reflected.reflect_mut() {
-        ReflectMut::Struct(s) => {
-            if let FieldPathSegment::Named(name) = segment
-                && let Some(field) = s.field_mut(name)
-            {
-                return set_field_value_recursive(field, remaining, new_value);
-            }
-        }
-        ReflectMut::TupleStruct(ts) => {
-            if let FieldPathSegment::Index(idx) = segment
-                && let Some(field) = ts.field_mut(*idx)
-            {
-                return set_field_value_recursive(field, remaining, new_value);
-            }
-        }
-        ReflectMut::Tuple(t) => {
-            if let FieldPathSegment::Index(idx) = segment
-                && let Some(field) = t.field_mut(*idx)
-            {
-                return set_field_value_recursive(field, remaining, new_value);
-            }
-        }
-        ReflectMut::Enum(e) => {
-            if let FieldPathSegment::Index(variant_idx) = segment
-                && variant_idx == &e.variant_index()
-                && let Some(field) = match remaining.first() {
-                    Some(FieldPathSegment::Index(idx)) => e.field_at_mut(*idx),
-                    Some(FieldPathSegment::Named(name)) => e.field_mut(name),
-                    None => None,
-                }
-            {
-                return set_field_value_recursive(field, &remaining[1..], new_value);
-            }
-        }
-
-        _ => {}
-    }
-
-    false
-}
-
-/// Applies a numeric value to a reflected field.
-fn apply_value_to_partial_reflect(reflected: &mut dyn PartialReflect, new_value: f64) -> bool {
-    // Try to apply to f32
-    if let Some(f32_val) = reflected.try_downcast_mut::<f32>() {
-        *f32_val = new_value as f32;
-        return true;
-    }
-
-    // Try to apply to f64
-    if let Some(f64_val) = reflected.try_downcast_mut::<f64>() {
-        *f64_val = new_value;
-        return true;
-    }
-
-    // Try to apply to i32
-    if let Some(i32_val) = reflected.try_downcast_mut::<i32>() {
-        *i32_val = new_value as i32;
-        return true;
-    }
-
-    // Try to apply to i64
-    if let Some(i64_val) = reflected.try_downcast_mut::<i64>() {
-        *i64_val = new_value as i64;
-        return true;
-    }
-
-    // Try to apply to u32
-    if let Some(u32_val) = reflected.try_downcast_mut::<u32>() {
-        *u32_val = new_value.max(0.0) as u32;
-        return true;
-    }
-
-    // Try to apply to u64
-    if let Some(u64_val) = reflected.try_downcast_mut::<u64>() {
-        *u64_val = new_value.max(0.0) as u64;
-        return true;
-    }
-
-    false
-}
-
-/// Resource to queue value changes for the write-back system
-#[derive(Resource, Default)]
-pub struct PendingValueChanges {
-    pub changes: Vec<DragValueChanged>,
-}
-
 /// Observer that queues value changes for later processing
-fn queue_value_change(trigger: On<DragValueChanged>, mut pending: ResMut<PendingValueChanges>) {
-    pending.changes.push(trigger.event().clone());
+fn queue_value_change(trigger: On<DragValueChanged>, mut pending: ResMut<DeferredChanges>) {
+    pending.changes.push(DeferredChange {
+        source: trigger.source,
+        field_path: trigger.field_path.clone(),
+        patch: Box::new(trigger.new_value).into_partial_reflect()
+    });
 }
 
 /// Observer: handle keyboard input during text edit mode
 fn drag_value_on_keyboard_input(
     trigger: On<FocusedInput<KeyboardInput>>,
-    mut q_drag_value: Query<(&DragValue, &mut DragValueDragState, &Children)>,
+    mut q_drag_value: Query<(&DragValue, &mut DragValueDragState, &mut PauseForEditing, &Children)>,
     mut q_text: Query<&mut Text>,
     mut input_focus: ResMut<InputFocus>,
     mut commands: Commands,
@@ -389,7 +312,7 @@ fn drag_value_on_keyboard_input(
 
     // Check if the focused entity is a DragValue in edit mode
     let entity = trigger.focused_entity;
-    if let Ok((drag_value, mut drag_state, children)) = q_drag_value.get_mut(entity) {
+    if let Ok((drag_value, mut drag_state, mut pause, children)) = q_drag_value.get_mut(entity) {
         if !drag_state.editing {
             return;
         }
@@ -416,7 +339,7 @@ fn drag_value_on_keyboard_input(
                 }
 
                 // Exit edit mode
-                exit_edit_mode(&mut drag_state, &mut input_focus, entity, &mut commands);
+                exit_edit_mode(&mut drag_state, &mut pause, &mut input_focus, entity, &mut commands);
             }
             Key::Escape => {
                 // Revert to original value
@@ -431,7 +354,7 @@ fn drag_value_on_keyboard_input(
                 }
 
                 // Exit edit mode
-                exit_edit_mode(&mut drag_state, &mut input_focus, entity, &mut commands);
+                exit_edit_mode(&mut drag_state, &mut pause, &mut input_focus, entity, &mut commands);
             }
             Key::Backspace => {
                 // Remove last character
@@ -461,17 +384,21 @@ fn drag_value_on_keyboard_input(
 /// Helper: exit edit mode
 fn exit_edit_mode(
     drag_state: &mut DragValueDragState,
+    pause: &mut PauseForEditing,
     input_focus: &mut ResMut<InputFocus>,
     entity: Entity,
     commands: &mut Commands,
 ) {
-    drag_state.editing = false;
-    drag_state.edit_buffer.clear();
-    input_focus.clear();
-    commands.trigger(DragValueEditModeChanged {
-        entity,
-        editing: false,
-    });
+    if drag_state.editing {
+        drag_state.editing = false;
+        **pause = false;
+        drag_state.edit_buffer.clear();
+        input_focus.clear();
+        commands.trigger(DragValueEditModeChanged {
+            entity,
+            editing: false,
+        });
+    } 
 }
 
 /// Helper: update the text display during editing
@@ -507,42 +434,12 @@ fn update_edit_mode_display(
     }
 }
 
-/// Exclusive system that writes queued value changes back to ECS components.
-pub fn apply_pending_value_changes(world: &mut World) {
-    // Take pending changes to avoid borrow issues
-    let changes = {
-        let mut pending = world.resource_mut::<PendingValueChanges>();
-        std::mem::take(&mut pending.changes)
-    };
-
-    for change in changes {
-        let field_path = &change.field_path;
-
-        // Get mutable access to the component and apply the change
-        if let Ok(mut reflected) =
-            get_component_reflect_mut(world, field_path.entity, field_path.component_type_id)
-        {
-            let success = set_field_value_recursive(
-                reflected.as_partial_reflect_mut(),
-                &field_path.path,
-                change.new_value,
-            );
-            if !success {
-                warn!(
-                    "Failed to set field value at path {:?} for entity {:?}",
-                    field_path.path, field_path.entity
-                );
-            }
-        }
-    }
-}
-
 /// Plugin that adds the DragValue widget observers.
 pub struct DragValuePlugin;
 
 impl Plugin for DragValuePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<PendingValueChanges>()
+        app
             // Drag behavior
             .add_observer(drag_value_on_drag_start)
             .add_observer(drag_value_on_drag)
@@ -555,7 +452,6 @@ impl Plugin for DragValuePlugin {
             .add_observer(update_drag_value_display)
             .add_observer(update_edit_mode_display)
             // Value change processing
-            .add_observer(queue_value_change)
-            .add_systems(Update, apply_pending_value_changes);
+            .add_observer(queue_value_change);
     }
 }

@@ -17,6 +17,8 @@ use bevy::window::{PrimaryWindow, WindowCloseRequested, WindowRef, WindowResolut
 
 use crate::gui::cache::{InspectorCache, periodically_refresh_cache, update_inspector_cache};
 use crate::gui::panels::{on_object_row_click, update_active_objects_tab_on_tab_activated};
+use crate::gui::widgets::apply::DeferredChangePlugin;
+use crate::gui::widgets::enum_widget::EnumWidgetPlugin;
 use crate::gui::widgets::registry::WidgetRegistry;
 
 use super::config::InspectorConfig;
@@ -26,6 +28,7 @@ use super::panels::{
 use super::semantic_names::SemanticFieldNames;
 use super::state::{InspectorInternal, InspectorState};
 use super::widgets::drag_value::DragValuePlugin;
+use super::widgets::dropdown::DropdownPlugin;
 use super::widgets::tabs::TabPlugin;
 
 /// Marker component for the inspector window.
@@ -68,6 +71,7 @@ impl Plugin for InspectorWindowPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(FeathersPlugins)
             .add_plugins(DragValuePlugin)
+            .add_plugins((DeferredChangePlugin, DropdownPlugin, EnumWidgetPlugin))
             .add_plugins(TabPlugin)
             .insert_resource(UiTheme(create_dark_theme()))
             // Resources
@@ -468,6 +472,11 @@ fn toggle_is_paused_on_activate(
     };
 
     state.is_paused = !state.is_paused;
+    if state.is_paused {
+        println!("pausing for {} !", activate.entity);
+    } else {
+        println!("unpausing for {} !", activate.entity);
+    }
 
     // Forces a cache refresh to get the freshest data.
     refresh_cache.write(RefreshCache { force: true });

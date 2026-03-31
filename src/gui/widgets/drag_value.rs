@@ -16,8 +16,8 @@ use bevy::reflect::ReflectMut;
 use core::any::TypeId;
 use std::time::{Duration, Instant};
 
-use crate::reflection_tools::get_component_reflect_mut;
 use super::{FieldPath, FieldPathSegment};
+use crate::reflection_tools::get_component_reflect_mut;
 
 /// Double-click detection threshold (in milliseconds)
 const DOUBLE_CLICK_THRESHOLD_MS: u64 = 300;
@@ -73,7 +73,7 @@ pub struct DragValue {
 }
 
 /// Tracks the drag state of a DragValue widget.
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct DragValueDragState {
     /// Whether currently dragging.
     pub dragging: bool,

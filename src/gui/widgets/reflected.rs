@@ -66,16 +66,16 @@ fn vec3_value(
         }
         BorderColor::all(Color::srgba(0.3, 0.3, 0.3, 1.0))
         BackgroundColor(Color::srgba(0.15, 0.15, 0.15, 1.0))
-        template(move |_context| Ok((DragValue {
+        template(move |_ctx| Ok((DragValue {
                 field_path: field_path.clone(),
                 drag_speed: 0.1,
                 precision: 2,
                 min: None,
                 max: None,
             },
-            DragValueDragState::default()
         )))
-        Interaction::default()
+        DragValueDragState
+        Interaction
         Children [
             Text::new(format!("{:.2}", val))
             template(move |_ctx| Ok(
@@ -138,8 +138,8 @@ impl ReflectWidget for f32 {
                     min: None,
                     max: None,
                 },
-                DragValueDragState::default(),
             )))
+            DragValueDragState
             Interaction
             Children[(
                 Text::new(format!("{:.2}", val))

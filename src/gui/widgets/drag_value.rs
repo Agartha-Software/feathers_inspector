@@ -22,39 +22,6 @@ use crate::reflection_tools::get_component_reflect_mut;
 /// Double-click detection threshold (in milliseconds)
 const DOUBLE_CLICK_THRESHOLD_MS: u64 = 300;
 
-/// Props for spawning a DragValue widget.
-pub struct DragValueProps {
-    /// The field path for write-back.
-    pub field_path: FieldPath,
-    /// Current value.
-    pub value: f64,
-    /// How fast dragging changes the value.
-    pub drag_speed: f64,
-    /// Precision (decimal places for display).
-    pub precision: usize,
-    /// Minimum value (optional).
-    pub min: Option<f64>,
-    /// Maximum value (optional).
-    pub max: Option<f64>,
-}
-
-impl Default for DragValueProps {
-    fn default() -> Self {
-        Self {
-            field_path: FieldPath {
-                entity: Entity::PLACEHOLDER,
-                component_type_id: TypeId::of::<()>(),
-                path: vec![],
-            },
-            value: 0.0,
-            drag_speed: 0.1,
-            precision: 2,
-            min: None,
-            max: None,
-        }
-    }
-}
-
 /// Marker component for a drag value widget.
 /// Contains the field path for write-back and configuration.
 #[derive(Component, Clone)]
@@ -70,6 +37,22 @@ pub struct DragValue {
     pub min: Option<f64>,
     /// Maximum allowed value.
     pub max: Option<f64>,
+}
+
+impl Default for DragValue {
+    fn default() -> Self {
+        Self {
+            field_path: FieldPath {
+                entity: Entity::PLACEHOLDER,
+                component_type_id: TypeId::of::<()>(),
+                path: vec![],
+            },
+            drag_speed: 0.1,
+            precision: 2,
+            min: None,
+            max: None,
+        }
+    }
 }
 
 /// Tracks the drag state of a DragValue widget.

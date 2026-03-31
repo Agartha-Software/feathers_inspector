@@ -11,6 +11,7 @@ use bevy::feathers::theme::ThemeBackgroundColor;
 use bevy::feathers::tokens;
 use bevy::prelude::*;
 use bevy::reflect::{ReflectRef, enums::VariantType};
+use bevy::scene2::EntityWorldMutSceneExt;
 use bevy::ui::Val::*;
 use bevy::ui_widgets::{Activate, ControlOrientation, CoreScrollbarThumb, Scrollbar, observe};
 
@@ -592,7 +593,7 @@ fn spawn_components_tab_exclusive(
                             TextColor(field_name_color),
                         ));
 
-                        field.widget.apply(&mut row.spawn_empty());
+                        let _ = row.spawn_empty().apply_scene(field.widget);
                     });
                 }
             });

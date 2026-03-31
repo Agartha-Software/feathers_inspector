@@ -1,7 +1,7 @@
 use bevy::ecs::template::template;
 use bevy::prelude::*;
 use bevy::reflect::enums::Enum;
-use bevy::scene2::{EntityWorldMutSceneExt, Scene, bsn};
+use bevy::scene2::{Scene, bsn};
 use bevy::ui::Val::*;
 use bevy::{
     feathers::{
@@ -16,24 +16,31 @@ use crate::gui::{config::InspectorConfig, widgets::FieldPath};
 
 use super::reflected::PartialReflectWidget;
 
-/// Type-erasing function that places a widget [`Bundle`] into an empty entity
-pub struct ErasedScene(Box<dyn FnOnce(&mut EntityWorldMut<'_>) + 'static>);
+pub struct ErasedScene(Box<dyn Scene>);
 
-impl ErasedScene {
-    pub fn new<S: Scene>(widget: S) -> Self {
-        Self(Box::new(move |entity: &'_ mut EntityWorldMut<'_>| {
-            let _ = entity.apply_scene(widget);
-        }))
+impl Scene for ErasedScene {
+    fn resolve(
+        &self,
+        context: &mut bevy::scene2::ResolveContext,
+        scene: &mut bevy::scene2::ResolvedScene,
+    ) -> Result<(), bevy::scene2::ResolveSceneError> {
+        self.0.resolve(context, scene)
     }
 
-    pub fn apply(self, entity: &mut EntityWorldMut<'_>) {
-        self.0(entity)
+    fn register_dependencies(&self, dependencies: &mut bevy::scene2::SceneDependencies) {
+        self.0.register_dependencies(dependencies);
     }
 }
 
-/// Type-erasing function that initializes the [`Bundle`] for a given widget
+impl ErasedScene {
+    pub fn new<S: Scene>(widget: S) -> Self {
+        Self(Box::new(widget))
+    }
+}
+
+/// Type-erasing function that initializes the [`Scene`] for a given widget
 type WidgetCreator =
-    Box<dyn Fn(&dyn PartialReflect, &FieldPath) -> Option<ErasedScene> + Sync + Send + 'static>;
+    Box<dyn Fn(&dyn PartialReflect, &FieldPath) -> Option<ErasedScene> + Sync + Send>;
 
 /// Registry storing the widget implementations for types
 #[derive(Resource, Default)]

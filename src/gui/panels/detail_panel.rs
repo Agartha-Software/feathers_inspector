@@ -593,7 +593,19 @@ fn spawn_components_tab_exclusive(
                             TextColor(field_name_color),
                         ));
 
-                        let _ = row.spawn_empty().apply_scene(field.widget);
+                        // Field value
+                        let mut value = row.spawn_empty();
+                        if let Err(err) = value.apply_scene(field.widget) {
+                            // Temporary widget creation error handling
+                            value.insert((
+                                Text::new(format!("[{err}]")),
+                                TextFont {
+                                    font_size: FontSize::Px(small_font_size),
+                                    ..default()
+                                },
+                                TextColor(muted_text_color),
+                            ));
+                        }
                     });
                 }
             });

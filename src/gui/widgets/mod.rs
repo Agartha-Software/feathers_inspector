@@ -6,6 +6,7 @@
 //!   - Double-click to enter text input mode
 
 pub mod drag_value;
+pub mod inspector_widgets;
 pub mod reflected;
 pub mod registry;
 pub mod tabs;

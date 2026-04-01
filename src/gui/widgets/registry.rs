@@ -39,8 +39,7 @@ impl ErasedScene {
 }
 
 /// Type-erasing function that initializes the [`Scene`] for a given widget
-type WidgetCreator =
-    Box<dyn Fn(&dyn PartialReflect, &FieldPath) -> Option<ErasedScene> + Sync + Send>;
+type WidgetCreator = fn(&dyn PartialReflect, &FieldPath) -> Option<ErasedScene>;
 
 /// Registry storing the widget implementations for types
 #[derive(Resource, Default)]
@@ -57,7 +56,7 @@ impl WidgetRegistry {
     /// Register a type that implements a widget
     pub fn add<T: PartialReflectWidget>(&mut self) {
         self.builders
-            .insert(TypeId::of::<T>(), Box::new(Self::builder_for::<T>));
+            .insert(TypeId::of::<T>(), Self::widget_for::<T>);
     }
 
     /// Register or override a type with a widget and bypass the [`PartialReflectWidget`] trait
@@ -77,7 +76,7 @@ impl WidgetRegistry {
             .and_then(|b| b(t, field_path))
     }
 
-    /// get a label pseudo-widget
+    /// Get a label pseudo-widget
     pub fn label_widget(label: String) -> impl Scene {
         bsn!(
             Text::new(label.clone())
@@ -97,7 +96,7 @@ impl WidgetRegistry {
         )
     }
 
-    /// get an enum variant widget for this type
+    /// Get an enum variant widget for this type
     /// todo: mutation of the variant with this widget
     pub fn enum_widget(type_name: &str, t: &dyn Enum) -> impl Scene {
         let inner = format!("{type_name}::{}", t.variant_name());
@@ -124,8 +123,8 @@ impl WidgetRegistry {
         )
     }
 
-    /// function enclosing the creation of a builder
-    fn builder_for<T: PartialReflectWidget>(
+    /// Type erase the widget [`Scene`] for a given type implementing [`PartialReflectWidget`]
+    fn widget_for<T: PartialReflectWidget>(
         t: &dyn PartialReflect,
         field_path: &FieldPath,
     ) -> Option<ErasedScene> {

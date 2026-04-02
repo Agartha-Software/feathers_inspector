@@ -12,7 +12,7 @@ use bevy::feathers::theme::ThemeBackgroundColor;
 use bevy::feathers::tokens;
 use bevy::prelude::*;
 use bevy::reflect::{ReflectRef, enums::VariantType};
-use bevy::scene2::{EntityWorldMutSceneExt, bsn, on};
+use bevy::scene2::{EntityWorldMutSceneExt, Scene, bsn, on};
 use bevy::ui::Val::*;
 use bevy::ui_widgets::{Activate, ControlOrientation, CoreScrollbarThumb, Scrollbar, observe};
 
@@ -720,6 +720,53 @@ fn spawn_components_tab_exclusive(
     });
 }
 
+fn relationship_link_button(entity: Entity, name: String, comp_count: usize) -> impl Scene {
+    bsn! {
+        // Wrap button in container to handle margin (button() already includes Node)
+        template(move |ctx| {
+            Ok(Node {
+                margin: UiRect::bottom(ctx.resource::<InspectorConfig>().item_gap),
+                ..default()
+            })
+        })
+        Children [(
+            button(ButtonProps::default())
+            HierarchyNode(entity)
+            on(on_hierarchy_node_click)
+            Children [(
+                Text::new(format!("{} ({} components)", name, comp_count))
+                template(move |ctx| {
+                    Ok(TextFont {
+                        font_size: FontSize::Px(ctx.resource::<InspectorConfig>().body_font_size),
+                        ..default()
+                    })
+                })
+                TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0))
+            )]
+        )]
+    }
+}
+
+fn missing_relationship_text(text: String) -> impl Scene {
+    bsn! {
+        Node {
+            margin: UiRect::bottom(Px(16.0)),
+        }
+        Text::new(text.to_owned())
+        template(move |ctx| {
+            let config = ctx.resource::<InspectorConfig>();
+
+            Ok((
+                TextFont {
+                    font_size: FontSize::Px(config.body_font_size),
+                    ..default()
+                },
+                TextColor(config.muted_text_color),
+            ))
+        })
+    }
+}
+
 fn spawn_relationships_tab_exclusive(
     world: &mut World,
     parent: Entity,
@@ -769,14 +816,6 @@ fn spawn_relationships_tab_exclusive(
 
     let children_len = children.len();
 
-    let &InspectorConfig {
-        title_font_size,
-        body_font_size,
-        muted_text_color,
-        item_gap,
-        ..
-    } = world.resource::<InspectorConfig>();
-
     world.entity_mut(parent).with_children(|p| {
         let _ = p.spawn_empty().apply_scene(bsn! {
             // Parent section
@@ -792,104 +831,40 @@ fn spawn_relationships_tab_exclusive(
                 })
             })
         });
-
-        let mut parent_section = p.spawn_empty();
-
         if let Some((ent, name, comp_count)) = parent_node_data {
-            let label = format!("{} ({} components)", name, comp_count);
-            let _ = parent_section.apply_scene(bsn! {
-                // Wrap button in container to handle margin (button() already includes Node)
-                Node {
-                    margin: UiRect::bottom(item_gap),
-                }
-                Children [(
-                    button(ButtonProps::default())
-                    HierarchyNode(ent)
-                    on(on_hierarchy_node_click)
-                    Children [(
-                        Text::new(label.clone())
-                        template(move |ctx| {
-                            Ok(TextFont {
-                                font_size: FontSize::Px(ctx.resource::<InspectorConfig>().body_font_size),
-                                ..default()
-                            })
-                        })
-                        TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0))
-                    )]
-                )]
-            });
+            let _ = p
+                .spawn_empty()
+                .apply_scene(relationship_link_button(ent, name, comp_count));
         } else {
-            let _ = parent_section.apply_scene(bsn! {
-                Node {
-                    margin: UiRect::bottom(Px(16.0)),
-                }
-                Text::new("No parent (root entity)")
-                template(move |ctx| {
-                    let config = ctx.resource::<InspectorConfig>();
-
-                    Ok((
-                        TextFont {
-                            font_size: FontSize::Px(config.body_font_size),
-                            ..default()
-                        },
-                        TextColor(config.muted_text_color),
-                    ))
-                })
-            });
+            let _ = p.spawn_empty().apply_scene(missing_relationship_text(
+                "No parent (root entity)".to_string(),
+            ));
         }
 
         // Children section
-        p.spawn((
-            Text::new(format!("Children ({})", children_len)),
-            TextFont {
-                font_size: FontSize::Px(title_font_size),
-                ..default()
-            },
-            TextColor(Color::WHITE),
-            Node {
-                margin: UiRect::new(Px(0.0), Px(0.0), Px(16.0), Px(8.0)),
-                ..default()
-            },
-        ));
-
-        if children_node_data.is_empty() {
-            p.spawn((
-                Text::new("No children"),
-                TextFont {
-                    font_size: FontSize::Px(body_font_size),
-                    ..default()
-                },
-                TextColor(muted_text_color),
-                Node {
-                    margin: UiRect::bottom(Px(16.0)),
-                    ..default()
-                },
-            ));
-        } else {
-            for (ent, name, comp_count) in children_node_data {
-                let label = format!("{} ({} components)", name, comp_count);
-                // Wrap button in container to handle margin (button() already includes Node)
-                p.spawn(Node {
-                    margin: UiRect::bottom(item_gap),
+        let _ = p.spawn_empty().apply_scene(bsn! {
+            Text::new(format!("Children ({})", children_len))
+            TextColor(Color::WHITE)
+            template(move |ctx| {
+                Ok(TextFont {
+                    font_size: FontSize::Px(ctx.resource::<InspectorConfig>().title_font_size),
                     ..default()
                 })
-                .with_children(|wrapper| {
-                    wrapper.spawn((
-                        button_bundle(
-                            ButtonProps::default(),
-                            HierarchyNode(ent),
-                            bevy::prelude::Spawn((
-                                Text::new(label),
-                                TextFont {
-                                    font_size: FontSize::Px(body_font_size),
-                                    ..default()
-                                },
-                                TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0)),
-                            )),
-                        ),
-                        observe(on_hierarchy_node_click),
-                    ));
-                });
+            })
+            Node {
+                margin: UiRect::new(Px(0.0), Px(0.0), Px(16.0), Px(8.0))
+            }
+        });
+
+        if children_node_data.is_empty() {
+            let _ = p
+                .spawn_empty()
+                .apply_scene(missing_relationship_text("No children".to_string()));
+        } else {
+            for (ent, name, comp_count) in children_node_data {
+                let _ = p
+                    .spawn_empty()
+                    .apply_scene(relationship_link_button(ent, name, comp_count));
             }
         }
     });

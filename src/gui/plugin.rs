@@ -1,8 +1,8 @@
 //! Inspector window plugin and UI scaffold.
 
 use bevy::camera::RenderTarget;
-use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::ecs::relationship::Relationship;
+use bevy::ecs::template::template;
 use bevy::feathers::FeathersPlugins;
 use bevy::feathers::controls::{ButtonProps, button};
 use bevy::feathers::dark_theme::create_dark_theme;
@@ -11,6 +11,7 @@ use bevy::feathers::tokens;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::picking::hover::HoverMap;
 use bevy::prelude::*;
+use bevy::scene2::{EntityCommandsSceneExt, Scene, bsn};
 use bevy::ui::Val::*;
 use bevy::ui_widgets::Activate;
 use bevy::window::{PrimaryWindow, WindowCloseRequested, WindowRef, WindowResolution};
@@ -36,11 +37,11 @@ pub struct InspectorWindow;
 struct InspectorUiInitialized;
 
 /// Marker component for the pause button.
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 pub struct PauseButton;
 
 /// Marker component for the refresh button.
-#[derive(Component)]
+#[derive(Component, Clone, Default)]
 pub struct RefreshButton;
 
 /// System sets for organizing inspector systems.
@@ -257,7 +258,6 @@ fn spawn_inspector_window(
 fn setup_inspector_ui(
     mut commands: Commands,
     config: Res<InspectorConfig>,
-    state: Res<InspectorState>,
     inspector_windows: Query<Entity, (With<InspectorWindow>, Without<InspectorUiInitialized>)>,
     mut refresh_cache: MessageWriter<RefreshCache>,
 ) {
@@ -281,130 +281,130 @@ fn setup_inspector_ui(
         .id();
 
     // Build UI hierarchy
-    commands
-        .spawn((
-            Node {
-                width: Percent(100.0),
-                height: Percent(100.0),
-                display: Display::Flex,
-                flex_direction: FlexDirection::Column,
-                ..default()
-            },
-            ThemeBackgroundColor(tokens::WINDOW_BG),
-            UiTargetCamera(camera_entity),
-        ))
-        .with_children(|root| {
-            // Title bar
-            spawn_title_bar(root, &config, &state);
+    let mut root = commands.spawn((
+        Node {
+            width: Percent(100.0),
+            height: Percent(100.0),
+            display: Display::Flex,
+            flex_direction: FlexDirection::Column,
+            ..default()
+        },
+        ThemeBackgroundColor(tokens::WINDOW_BG),
+        UiTargetCamera(camera_entity),
+    ));
 
-            // Main content area
-            root.spawn((Node {
-                width: Percent(100.0),
-                flex_grow: 1.0,
-                display: Display::Flex,
-                flex_direction: FlexDirection::Row,
-                padding: config.panel_padding,
-                column_gap: config.column_gap,
-                ..default()
-            },))
-                .with_children(|content| {
-                    // Left panel: Object list
-                    spawn_object_list_panel(content, &config);
-                    // Right panel: Detail view
-                    spawn_detail_panel(content, &config);
-                });
-        });
+    root.with_children(|root| {
+        // Title bar
+        root.spawn_empty().apply_scene(title_bar());
+        // Main content area
+        root.spawn((Node {
+            width: Percent(100.0),
+            flex_grow: 1.0,
+            display: Display::Flex,
+            flex_direction: FlexDirection::Row,
+            padding: config.panel_padding,
+            column_gap: config.column_gap,
+            ..default()
+        },))
+            .with_children(|content| {
+                // Left panel: Object list
+                spawn_object_list_panel(content, &config);
+                // Right panel: Detail view
+                spawn_detail_panel(content, &config);
+            });
+    });
 
     // User needs to see new data immediately.
     refresh_cache.write_default();
 }
 
-fn spawn_title_bar(
-    parent: &mut ChildSpawnerCommands<'_>,
-    config: &InspectorConfig,
-    state: &InspectorState,
-) {
-    parent
-        .spawn((
-            Node {
-                width: Percent(100.0),
-                height: config.title_bar_height,
-                display: Display::Flex,
-                align_items: AlignItems::Center,
-                padding: config.panel_padding,
-                border: UiRect::bottom(Px(1.0)),
-                ..default()
-            },
-            BorderColor::all(config.border_color),
-        ))
-        .with_children(|bar| {
-            bar.spawn((
-                Text::new("Feathers Inspector"),
-                TextFont {
-                    font_size: FontSize::Px(config.title_font_size + 2.0),
+fn title_bar() -> impl Scene {
+    bsn! {
+        template(move |ctx| {
+            let config = ctx.resource::<InspectorConfig>();
+
+            Ok((
+                Node {
+                    width: Percent(100.0),
+                    height: config.title_bar_height,
+                    display: Display::Flex,
+                    align_items: AlignItems::Center,
+                    padding: config.panel_padding,
+                    border: UiRect::bottom(Px(1.0)),
                     ..default()
                 },
-                TextColor(Color::WHITE),
-            ));
+                BorderColor::all(config.border_color),
+            ))
+        })
 
+        Children [
+            (Text::new("Feathers Inspector")
+            TextColor(Color::WHITE)
+            template(move |ctx| {
+                let config = ctx.resource::<InspectorConfig>();
+
+                Ok(TextFont {
+                    font_size: FontSize::Px(config.title_font_size + 2.0),
+                    ..default()
+                })
+            })),
             // Flexible spacer
-            bar.spawn(Node {
+            (Node {
                 flex_grow: 1.0,
-                ..default()
-            });
-
+            }),
             // Toolbar action container
-            bar.spawn(Node {
+            (Node {
                 display: Display::Flex,
                 flex_direction: FlexDirection::Row,
                 column_gap: Val::Px(5.0),
                 flex_grow: 0.0,
-                ..default()
-            })
-            .with_children(|actions| {
+            }
+            Children [
                 // Wrapper because `Node` on `button` triggers segfault.
-                actions
-                    .spawn(Node {
-                        width: Val::Px(80.0),
-                        justify_content: JustifyContent::Center,
-                        ..default()
-                    })
-                    .with_children(|wrapper| {
-                        wrapper.spawn(button(
-                            ButtonProps::default(),
-                            RefreshButton,
-                            bevy::prelude::Spawn((
-                                Text::new("Refresh"),
-                                TextFont {
-                                    font_size: FontSize::Px(config.body_font_size),
-                                    ..default()
-                                },
-                            )),
-                        ));
-                    });
+                (Node {
+                    width: Val::Px(80.0),
+                    justify_content: JustifyContent::Center,
+                }
+                Children [(
+                    button(ButtonProps::default())
+                    RefreshButton
+                    Children [(
+                        Text::new("Refresh")
+                        template(move |ctx| {
+                            let config = ctx.resource::<InspectorConfig>();
 
-                // Wrapper because `Node` on `button` triggers segfault.
-                actions
-                    .spawn(Node {
-                        width: Val::Px(80.0),
-                        justify_content: JustifyContent::Center,
-                        ..default()
-                    })
-                    .with_children(|wrapper| {
-                        wrapper.spawn(button(
-                            ButtonProps::default(),
-                            PauseButton,
-                            bevy::prelude::Spawn((
+                            Ok(TextFont {
+                                font_size: FontSize::Px(config.body_font_size + 2.0),
+                                ..default()
+                            })
+                        })
+                    )]
+                )]),
+                (Node {
+                    width: Val::Px(80.0),
+                    justify_content: JustifyContent::Center,
+                }
+                Children [(
+                    button(ButtonProps::default())
+                    PauseButton
+                    Children [(
+                        template(move |ctx| {
+                            let config = ctx.resource::<InspectorConfig>();
+                            let state = ctx.resource::<InspectorState>();
+
+                            Ok((
                                 Text::new(if state.is_paused { "Resume" } else { "Pause" }),
                                 TextFont {
-                                    font_size: FontSize::Px(config.body_font_size),
+                                    font_size: FontSize::Px(config.body_font_size + 2.0),
                                     ..default()
-                                },
-                            )),
-                        ));
-                    });
-            });
-        });
+                                }
+                            ))
+                        })
+                    )]
+                )])
+            ])
+        ]
+    }
 }
 
 /// Handles mouse wheel scrolling by traversing up from hovered entities to find scrollable containers.

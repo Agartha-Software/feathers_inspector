@@ -307,6 +307,7 @@ pub fn is_dynamic_safe(val: &dyn PartialReflect) -> bool {
             true
         }
         ReflectRef::Opaque(_) => true,
+        ReflectRef::Function(_f) => todo!(),
     }
 }
 
@@ -352,6 +353,7 @@ pub fn reflected_value_to_string(reflected: &dyn PartialReflect, full_type_names
         ReflectRef::Opaque(opaque_partial_reflect) => {
             pretty_print_reflected_opaque(opaque_partial_reflect)
         }
+        ReflectRef::Function(_f) => todo!(),
     }
 }
 

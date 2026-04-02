@@ -6,11 +6,13 @@
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::ecs::observer::On;
 use bevy::ecs::relationship::Relationship;
-use bevy::feathers::controls::{ButtonProps, button_bundle};
+use bevy::ecs::template::template;
+use bevy::feathers::controls::{ButtonProps, button, button_bundle};
 use bevy::feathers::theme::ThemeBackgroundColor;
 use bevy::feathers::tokens;
 use bevy::prelude::*;
 use bevy::reflect::{ReflectRef, enums::VariantType};
+use bevy::scene2::{EntityWorldMutSceneExt, bsn, on};
 use bevy::ui::Val::*;
 use bevy::ui_widgets::{Activate, ControlOrientation, CoreScrollbarThumb, Scrollbar, observe};
 
@@ -44,8 +46,14 @@ pub struct DetailContent;
 pub struct ComponentCard;
 
 /// Marker for hierarchy nodes (parent/child entities).
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct HierarchyNode(pub Entity);
+
+impl Default for HierarchyNode {
+    fn default() -> Self {
+        Self(Entity::PLACEHOLDER)
+    }
+}
 
 /// Observer for tab button clicks.
 fn on_tab_button_click(
@@ -770,57 +778,64 @@ fn spawn_relationships_tab_exclusive(
     } = world.resource::<InspectorConfig>();
 
     world.entity_mut(parent).with_children(|p| {
-        // Parent section
-        p.spawn((
-            Text::new("Parent"),
-            TextFont {
-                font_size: FontSize::Px(title_font_size),
-                ..default()
-            },
-            TextColor(Color::WHITE),
+        let _ = p.spawn_empty().apply_scene(bsn! {
+            // Parent section
+            Text::new("Parent")
             Node {
                 margin: UiRect::bottom(Px(8.0)),
-                ..default()
-            },
-        ));
+            }
+            TextColor(Color::WHITE)
+            template(move |ctx| {
+                Ok(TextFont {
+                    font_size: FontSize::Px(ctx.resource::<InspectorConfig>().title_font_size),
+                    ..default()
+                })
+            })
+        });
+
+        let mut parent_section = p.spawn_empty();
 
         if let Some((ent, name, comp_count)) = parent_node_data {
             let label = format!("{} ({} components)", name, comp_count);
-            // Wrap button in container to handle margin (button() already includes Node)
-            p.spawn(Node {
-                margin: UiRect::bottom(item_gap),
-                ..default()
-            })
-            .with_children(|wrapper| {
-                wrapper.spawn((
-                    button_bundle(
-                        ButtonProps::default(),
-                        HierarchyNode(ent),
-                        bevy::prelude::Spawn((
-                            Text::new(label),
-                            TextFont {
-                                font_size: FontSize::Px(body_font_size),
+            let _ = parent_section.apply_scene(bsn! {
+                // Wrap button in container to handle margin (button() already includes Node)
+                Node {
+                    margin: UiRect::bottom(item_gap),
+                }
+                Children [(
+                    button(ButtonProps::default())
+                    HierarchyNode(ent)
+                    on(on_hierarchy_node_click)
+                    Children [(
+                        Text::new(label.clone())
+                        template(move |ctx| {
+                            Ok(TextFont {
+                                font_size: FontSize::Px(ctx.resource::<InspectorConfig>().body_font_size),
                                 ..default()
-                            },
-                            TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0)),
-                        )),
-                    ),
-                    observe(on_hierarchy_node_click),
-                ));
+                            })
+                        })
+                        TextColor(Color::srgba(0.9, 0.9, 0.9, 1.0))
+                    )]
+                )]
             });
         } else {
-            p.spawn((
-                Text::new("No parent (root entity)"),
-                TextFont {
-                    font_size: FontSize::Px(body_font_size),
-                    ..default()
-                },
-                TextColor(muted_text_color),
+            let _ = parent_section.apply_scene(bsn! {
                 Node {
                     margin: UiRect::bottom(Px(16.0)),
-                    ..default()
-                },
-            ));
+                }
+                Text::new("No parent (root entity)")
+                template(move |ctx| {
+                    let config = ctx.resource::<InspectorConfig>();
+
+                    Ok((
+                        TextFont {
+                            font_size: FontSize::Px(config.body_font_size),
+                            ..default()
+                        },
+                        TextColor(config.muted_text_color),
+                    ))
+                })
+            });
         }
 
         // Children section

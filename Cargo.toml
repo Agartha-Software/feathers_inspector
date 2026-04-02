@@ -16,7 +16,7 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy.git", rev = "f4d17d9eb2ab038deb3e8dd462351cd43fb32390", features = [
+bevy = { git = "https://github.com/bevyengine/bevy.git", rev = "45e454a83bffd7a496621ba77bc3429fa472733d", features = [
 	"track_location",
 	"experimental_bevy_feathers",
 	"debug",
@@ -24,7 +24,7 @@ bevy = { git = "https://github.com/bevyengine/bevy.git", rev = "f4d17d9eb2ab038d
 serde = { version = "1.0", optional = true, features = ["derive"] }
 serde_json = { version = "1.0", optional = true }
 strsim = "0.11.1"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 ureq = { version = "3.1.4", features = ["json"] }

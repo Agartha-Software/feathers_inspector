@@ -39,7 +39,7 @@
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::ecs::observer::On;
 
-use bevy::feathers::controls::{ButtonProps, button};
+use bevy::feathers::controls::{ButtonProps, button_bundle};
 use bevy::prelude::*;
 use bevy::ui::Val::*;
 use bevy::ui_widgets::{Activate, ControlOrientation, CoreScrollbarThumb, Scrollbar};
@@ -134,7 +134,7 @@ fn spawn_object_row(
         display_name, component_count, memory_size
     );
 
-    parent.spawn((button(
+    parent.spawn((button_bundle(
         ButtonProps::default(),
         ObjectRow {
             selected_object: entry.entity(),
@@ -216,7 +216,7 @@ pub fn spawn_object_list_panel(parent: &mut ChildSpawnerCommands<'_>, config: &I
             // Tab buttons
             let entities_tab_entity = panel
                 .commands()
-                .spawn(button(
+                .spawn(button_bundle(
                     ButtonProps::default(),
                     Tab,
                     bevy::prelude::Spawn((
@@ -230,7 +230,7 @@ pub fn spawn_object_list_panel(parent: &mut ChildSpawnerCommands<'_>, config: &I
                 .id();
             let resources_tab_entity = panel
                 .commands()
-                .spawn(button(
+                .spawn(button_bundle(
                     ButtonProps::default(),
                     Tab,
                     bevy::prelude::Spawn((
@@ -244,7 +244,7 @@ pub fn spawn_object_list_panel(parent: &mut ChildSpawnerCommands<'_>, config: &I
                 .id();
             let observers_tab_entity = panel
                 .commands()
-                .spawn(button(
+                .spawn(button_bundle(
                     ButtonProps::default(),
                     Tab,
                     bevy::prelude::Spawn((
@@ -258,7 +258,7 @@ pub fn spawn_object_list_panel(parent: &mut ChildSpawnerCommands<'_>, config: &I
                 .id();
             let one_shot_systems_tab_entity = panel
                 .commands()
-                .spawn(button(
+                .spawn(button_bundle(
                     ButtonProps::default(),
                     Tab,
                     bevy::prelude::Spawn((

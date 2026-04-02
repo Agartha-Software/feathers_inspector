@@ -6,7 +6,7 @@
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::ecs::observer::On;
 use bevy::ecs::relationship::Relationship;
-use bevy::feathers::controls::{ButtonProps, button};
+use bevy::feathers::controls::{ButtonProps, button_bundle};
 use bevy::feathers::theme::ThemeBackgroundColor;
 use bevy::feathers::tokens;
 use bevy::prelude::*;
@@ -481,6 +481,7 @@ fn format_simple_value(reflected: &dyn PartialReflect) -> Option<String> {
         ReflectRef::Map(m) => Some(format!("{{{} entries}}", m.len())),
         ReflectRef::Set(s) => Some(format!("{{{} items}}", s.len())),
         ReflectRef::Opaque(o) => Some(format!("{:?}", o)),
+        ReflectRef::Function(_f) => todo!(),
     }
 }
 
@@ -792,7 +793,7 @@ fn spawn_relationships_tab_exclusive(
             })
             .with_children(|wrapper| {
                 wrapper.spawn((
-                    button(
+                    button_bundle(
                         ButtonProps::default(),
                         HierarchyNode(ent),
                         bevy::prelude::Spawn((
@@ -859,7 +860,7 @@ fn spawn_relationships_tab_exclusive(
                 })
                 .with_children(|wrapper| {
                     wrapper.spawn((
-                        button(
+                        button_bundle(
                             ButtonProps::default(),
                             HierarchyNode(ent),
                             bevy::prelude::Spawn((
@@ -913,7 +914,7 @@ pub fn spawn_detail_panel(parent: &mut ChildSpawnerCommands<'_>, config: &Inspec
                 .with_children(|tabs| {
                     // Components tab
                     tabs.spawn((
-                        button(
+                        button_bundle(
                             ButtonProps::default(),
                             TabButton(DetailTab::Components),
                             bevy::prelude::Spawn((
@@ -929,7 +930,7 @@ pub fn spawn_detail_panel(parent: &mut ChildSpawnerCommands<'_>, config: &Inspec
 
                     // Relationships tab
                     tabs.spawn((
-                        button(
+                        button_bundle(
                             ButtonProps::default(),
                             TabButton(DetailTab::Relationships),
                             bevy::prelude::Spawn((
